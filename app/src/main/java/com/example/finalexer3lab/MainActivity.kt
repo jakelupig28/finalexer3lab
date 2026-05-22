@@ -34,6 +34,7 @@ import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.text.KeyboardOptions
@@ -54,6 +55,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.UserProfileChangeRequest
+import com.google.firebase.database.FirebaseDatabase
 import com.example.finalexer3lab.ui.theme.FinalExer3LabTheme
 
 class MainActivity : ComponentActivity() {
@@ -80,8 +86,9 @@ fun CravingApp() {
     val redLight = Color(0xFFFFE5E5)
     val inputBg = Color(0xFFF9F9F9)
     
+    val auth = FirebaseAuth.getInstance()
     var currentMainTab by remember { mutableStateOf("Profile") }
-    var currentAppScreen by remember { mutableStateOf("Login") } 
+    var currentAppScreen by remember { mutableStateOf(if (auth.currentUser != null) "Main" else "Login") }
 
     if (currentAppScreen == "Login" || currentAppScreen == "SignUp") {
         AuthScreen(
@@ -104,7 +111,8 @@ fun CravingApp() {
             cyanColor = cyanColor,
             redLight = redLight,
             currentTab = currentMainTab,
-            onTabSelected = { currentMainTab = it }
+            onTabSelected = { currentMainTab = it },
+            onLogout = { currentAppScreen = "Login" }
         )
     }
 }
@@ -197,6 +205,10 @@ fun LoginView(
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var rememberMe by remember { mutableStateOf(false) }
+    var passwordVisible by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    val auth = FirebaseAuth.getInstance()
 
     Column(
         modifier = Modifier
@@ -269,7 +281,13 @@ fun LoginView(
                 onValueChange = { password = it },
                 placeholder = { Text("••••••••", color = Color.Gray, fontSize = 14.sp) },
                 leadingIcon = { Icon(Icons.Outlined.Lock, contentDescription = null, tint = textGray) },
-                visualTransformation = PasswordVisualTransformation(),
+                trailingIcon = {
+                    val image = if (passwordVisible) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff
+                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                        Icon(imageVector = image, contentDescription = null, tint = textGray, modifier = Modifier.size(20.dp))
+                    }
+                },
+                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -298,7 +316,20 @@ fun LoginView(
         Spacer(modifier = Modifier.height(24.dp))
         
         Button(
-            onClick = onAuthSuccess,
+            onClick = {
+                if (email.isBlank() || password.isEmpty()) {
+                    Toast.makeText(context, "Please fill all fields", Toast.LENGTH_SHORT).show()
+                    return@Button
+                }
+                auth.signInWithEmailAndPassword(email.trim(), password)
+                    .addOnCompleteListener { task ->
+                        if (task.isSuccessful) {
+                            onAuthSuccess()
+                        } else {
+                            Toast.makeText(context, "Error: ${task.exception?.message}", Toast.LENGTH_LONG).show()
+                        }
+                    }
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(48.dp),
@@ -338,6 +369,11 @@ fun SignUpView(
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var agreed by remember { mutableStateOf(false) }
+    var passwordVisible by remember { mutableStateOf(false) }
+    var confirmPasswordVisible by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    val auth = FirebaseAuth.getInstance()
 
     Column(
         modifier = Modifier
@@ -411,8 +447,13 @@ fun SignUpView(
                 value = password,
                 onValueChange = { password = it },
                 placeholder = { Text("••••••••", color = Color.Gray, fontSize = 14.sp) },
-                trailingIcon = { Icon(Icons.Outlined.VisibilityOff, contentDescription = null, tint = textGray, modifier = Modifier.size(20.dp)) },
-                visualTransformation = PasswordVisualTransformation(),
+                trailingIcon = {
+                    val image = if (passwordVisible) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff
+                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                        Icon(imageVector = image, contentDescription = null, tint = textGray, modifier = Modifier.size(20.dp))
+                    }
+                },
+                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -433,8 +474,13 @@ fun SignUpView(
                 value = confirmPassword,
                 onValueChange = { confirmPassword = it },
                 placeholder = { Text("••••••••", color = Color.Gray, fontSize = 14.sp) },
-                trailingIcon = { Icon(Icons.Outlined.VisibilityOff, contentDescription = null, tint = textGray, modifier = Modifier.size(20.dp)) },
-                visualTransformation = PasswordVisualTransformation(),
+                trailingIcon = {
+                    val image = if (confirmPasswordVisible) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff
+                    IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }) {
+                        Icon(imageVector = image, contentDescription = null, tint = textGray, modifier = Modifier.size(20.dp))
+                    }
+                },
+                visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -466,7 +512,41 @@ fun SignUpView(
         Spacer(modifier = Modifier.height(24.dp))
 
         Button(
-            onClick = onAuthSuccess,
+            onClick = {
+                if (email.isBlank() || password.isEmpty() || fullName.isBlank()) {
+                    Toast.makeText(context, "Please fill all fields", Toast.LENGTH_SHORT).show()
+                    return@Button
+                }
+                if (password != confirmPassword) {
+                    Toast.makeText(context, "Passwords do not match", Toast.LENGTH_SHORT).show()
+                    return@Button
+                }
+                if (!agreed) {
+                    Toast.makeText(context, "Please agree to terms", Toast.LENGTH_SHORT).show()
+                    return@Button
+                }
+                auth.createUserWithEmailAndPassword(email.trim(), password)
+                    .addOnCompleteListener { task ->
+                        if (task.isSuccessful) {
+                            val user = auth.currentUser
+                            val profileUpdates = UserProfileChangeRequest.Builder()
+                                .setDisplayName(fullName.trim())
+                                .build()
+                            user?.updateProfile(profileUpdates)?.addOnCompleteListener {
+                                val db = FirebaseDatabase.getInstance().reference
+                                val userData = mapOf(
+                                    "fullName" to fullName.trim(),
+                                    "email" to email.trim()
+                                )
+                                db.child("users").child(user.uid).setValue(userData).addOnCompleteListener {
+                                    onAuthSuccess()
+                                }
+                            }
+                        } else {
+                            Toast.makeText(context, "Error: ${task.exception?.message}", Toast.LENGTH_LONG).show()
+                        }
+                    }
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(48.dp),
@@ -502,7 +582,8 @@ fun MainScreen(
     cyanColor: Color,
     redLight: Color,
     currentTab: String,
-    onTabSelected: (String) -> Unit
+    onTabSelected: (String) -> Unit,
+    onLogout: () -> Unit
 ) {
     Scaffold(
         containerColor = containerColor,
@@ -545,6 +626,7 @@ fun MainScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color.White)
+                    .navigationBarsPadding()
                     .padding(vertical = 12.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
@@ -567,14 +649,14 @@ fun MainScreen(
                     SavedScreen(textColor, textGray, priceGreen, cyanColor, appRed)
                 }
                 "Profile" -> {
-                    ProfileScreen(textColor, textGray, appRed)
+                    ProfileScreen(textColor, textGray, appRed, onLogout)
                 }
                 "Orders" -> {
                     OrdersScreen(textColor, textGray, priceGreen, appRed, redLight)
                 }
                 else -> {
                     // Home
-                    Text("Select Orders or Profile", modifier = Modifier.padding(16.dp))
+                    HomeScreen(textColor, textGray, priceGreen, appRed)
                 }
             }
         }
@@ -582,7 +664,191 @@ fun MainScreen(
 }
 
 @Composable
-fun ProfileScreen(textColor: Color, textGray: Color, appRed: Color) {
+fun HomeScreen(textColor: Color, textGray: Color, priceGreen: Color, appRed: Color) {
+    val context = LocalContext.current
+    val menuItems = remember { listOf(
+        FoodItemData("Classic Burger", "₱150", R.drawable.burger, 150),
+        FoodItemData("Pepperoni Pizza", "₱280", R.drawable.pizza, 280),
+        FoodItemData("Creamy Carbonara", "₱180", R.drawable.pasta, 180),
+        FoodItemData("Iced Tea", "₱120", R.drawable.iced_tea, 120)
+    ) }
+    
+    val selectedItems = remember { mutableStateListOf<FoodItemData>() }
+    var showDialog by remember { mutableStateOf(false) }
+
+    Spacer(modifier = Modifier.height(24.dp))
+    
+    Text(
+        text = "What are you\ncraving?",
+        fontSize = 32.sp,
+        fontWeight = FontWeight.Black,
+        color = textColor,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth(),
+        lineHeight = 36.sp
+    )
+    
+    Spacer(modifier = Modifier.height(8.dp))
+    
+    Text(
+        text = "Select multiple items from the menu\nbelow.",
+        fontSize = 14.sp,
+        color = textGray,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth()
+    )
+    
+    Spacer(modifier = Modifier.height(24.dp))
+    
+    menuItems.forEach { item ->
+        HomeFoodCard(
+            title = item.title, 
+            price = item.priceStr, 
+            imageRes = item.imageRes, 
+            priceGreen = priceGreen, 
+            textColor = textColor,
+            isChecked = selectedItems.contains(item),
+            onCheckedChange = { isChecked ->
+                if (isChecked) selectedItems.add(item) else selectedItems.remove(item)
+            }
+        )
+    }
+    
+    Spacer(modifier = Modifier.height(24.dp))
+    
+    Button(
+        onClick = { if (selectedItems.isNotEmpty()) showDialog = true },
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = appRed)
+    ) {
+        Icon(
+            imageVector = Icons.Default.ShoppingBag,
+            contentDescription = "Place Order",
+            tint = Color.White,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(text = "Place Order", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
+    }
+    
+    Spacer(modifier = Modifier.height(16.dp))
+
+    if (showDialog) {
+        val total = selectedItems.sumOf { it.priceVal }
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text(text = "Order Confirmation", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text(text = "You have selected:")
+                    selectedItems.forEach { item ->
+                        Text(text = "- ${item.title} (${item.price})")
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(text = "Total:", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = textColor)
+                    Text(text = "₱$total", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = appRed)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { 
+                    val user = FirebaseAuth.getInstance().currentUser
+                    val uid = user?.uid ?: "unknown_user"
+                    val db = FirebaseDatabase.getInstance().reference
+                    val orderRef = db.child("orders").push()
+
+                    val orderData = mapOf(
+                        "userId" to uid,
+                        "items" to selectedItems.map { it.title },
+                        "total" to total,
+                        "timestamp" to System.currentTimeMillis()
+                    )
+
+                    orderRef.setValue(orderData).addOnCompleteListener {
+                        showDialog = false
+                        selectedItems.clear()
+                        Toast.makeText(context, "Order Placed Successfully!", Toast.LENGTH_SHORT).show()
+                    }
+                }) {
+                    Text("Confirm", color = appRed, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDialog = false }) {
+                    Text("Cancel", color = textGray)
+                }
+            },
+            containerColor = Color.White
+        )
+    }
+}
+
+@Composable
+fun HomeFoodCard(title: String, price: String, imageRes: Int, priceGreen: Color, textColor: Color, isChecked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Image(
+                painter = painterResource(id = imageRes),
+                contentDescription = title,
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(RoundedCornerShape(16.dp)),
+                contentScale = ContentScale.Crop
+            )
+            
+            Spacer(modifier = Modifier.width(16.dp))
+            
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    color = textColor
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = price,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = priceGreen
+                )
+            }
+            
+            Checkbox(
+                checked = isChecked,
+                onCheckedChange = onCheckedChange,
+                colors = CheckboxDefaults.colors(
+                    checkedColor = Color(0xFFE0E0E0), 
+                    checkmarkColor = Color.White,
+                    uncheckedColor = Color(0xFFE0E0E0)
+                ),
+                modifier = Modifier.padding(end = 8.dp)
+            )
+        }
+    }
+}
+
+@Composable
+fun ProfileScreen(textColor: Color, textGray: Color, appRed: Color, onLogout: () -> Unit) {
+    val auth = FirebaseAuth.getInstance()
+    val user = auth.currentUser
+    val name = user?.displayName ?: "User Name"
+    val email = user?.email ?: "user@example.com"
+
     Spacer(modifier = Modifier.height(24.dp))
 
     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -608,8 +874,8 @@ fun ProfileScreen(textColor: Color, textGray: Color, appRed: Color) {
                     .offset(x = (-4).dp, y = (-4).dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = "Edit Profile",
+                    imageVector = Icons.Outlined.BookmarkBorder,
+                    contentDescription = "Add to Favorites",
                     tint = Color.White,
                     modifier = Modifier.padding(6.dp)
                 )
@@ -620,7 +886,7 @@ fun ProfileScreen(textColor: Color, textGray: Color, appRed: Color) {
     Spacer(modifier = Modifier.height(16.dp))
 
     Text(
-        text = "Alex Doe",
+        text = name,
         fontSize = 28.sp,
         fontWeight = FontWeight.Black,
         color = textColor,
@@ -631,7 +897,7 @@ fun ProfileScreen(textColor: Color, textGray: Color, appRed: Color) {
     Spacer(modifier = Modifier.height(4.dp))
 
     Text(
-        text = "alex.doe@example.com",
+        text = email,
         fontSize = 14.sp,
         color = textGray,
         textAlign = TextAlign.Center,
@@ -651,7 +917,10 @@ fun ProfileScreen(textColor: Color, textGray: Color, appRed: Color) {
             ProfileMenuItem(icon = Icons.Outlined.CreditCard, label = "Payment Methods", showDivider = true)
             ProfileMenuItem(icon = Icons.Outlined.LocationOn, label = "Delivery Addresses", showDivider = true)
             ProfileMenuItem(icon = Icons.Outlined.Notifications, label = "Notifications", showDivider = true)
-            ProfileMenuItem(icon = Icons.Outlined.ExitToApp, label = "Logout", isDestructive = true, showDivider = false)
+            ProfileMenuItem(icon = Icons.Outlined.ExitToApp, label = "Logout", isDestructive = true, showDivider = false, onClick = {
+                auth.signOut()
+                onLogout()
+            })
         }
     }
 
@@ -659,12 +928,13 @@ fun ProfileScreen(textColor: Color, textGray: Color, appRed: Color) {
 }
 
 @Composable
-fun ProfileMenuItem(icon: ImageVector, label: String, isDestructive: Boolean = false, showDivider: Boolean = true) {
+fun ProfileMenuItem(icon: ImageVector, label: String, isDestructive: Boolean = false, showDivider: Boolean = true, onClick: () -> Unit = {}) {
     val color = if (isDestructive) Color(0xFFA1132A) else Color(0xFF1B1B1B)
     Column {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .clickable(onClick = onClick)
                 .padding(horizontal = 20.dp, vertical = 18.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -757,7 +1027,7 @@ fun OrdersScreen(textColor: Color, textGray: Color, priceGreen: Color, appRed: C
                     modifier = Modifier.weight(1f)
                 )
                 Text(
-                    text = "$18.50",
+                    text = "₱250",
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp,
                     color = priceGreen
@@ -816,7 +1086,7 @@ fun OrdersScreen(textColor: Color, textGray: Color, priceGreen: Color, appRed: C
     PastOrderCard(
         imageRes = R.drawable.pasta, // Using pasta since seafood/sushi might not be available exactly, wait actually the screenshot shows sushi, using pasta as substitute if needed, wait we only have the prev specific images
         title = "Deluxe Sushi Combo",
-        price = "$32.00",
+        price = "₱450",
         items = "1x Spicy Tuna Roll, 1x Salmon Nigiri Set",
         date = "Oct 12, 2023",
         priceGreen = priceGreen,
@@ -827,7 +1097,7 @@ fun OrdersScreen(textColor: Color, textGray: Color, priceGreen: Color, appRed: C
     PastOrderCard(
         imageRes = R.drawable.pizza,
         title = "Artisan Margherita Pizza",
-        price = "$24.00",
+        price = "₱380",
         items = "1x Large Margherita, 1x Garlic Knots",
         date = "Oct 05, 2023",
         priceGreen = priceGreen,
@@ -970,7 +1240,7 @@ fun SavedScreen(textColor: Color, textGray: Color, priceGreen: Color, cyanColor:
         category = "Burgers",
         title = "Classic Double Smash",
         description = "Two seared beef patties, American cheese, house sauce, pickles, toasted potato roll.",
-        price = "$14.88",
+        price = "₱190",
         priceGreen = priceGreen,
         cyanColor = cyanColor,
         appRed = appRed
@@ -981,7 +1251,7 @@ fun SavedScreen(textColor: Color, textGray: Color, priceGreen: Color, cyanColor:
         category = "Pizza",
         title = "Artisan Pepperoni",
         description = "San Marzano tomato sauce, fresh mozzarella, spicy cup-and-char pepperoni, hot honey drizzle.",
-        price = "$22.50",
+        price = "₱290",
         priceGreen = priceGreen,
         cyanColor = cyanColor,
         appRed = appRed
@@ -992,7 +1262,7 @@ fun SavedScreen(textColor: Color, textGray: Color, priceGreen: Color, cyanColor:
         category = "Japanese",
         title = "Omakase Signature Roll",
         description = "Spicy tuna, cucumber, topped with torched salmon, spicy mayo, and scallions. 8 pieces.",
-        price = "$34.00",
+        price = "₱480",
         priceGreen = priceGreen,
         cyanColor = cyanColor,
         appRed = appRed
@@ -1003,7 +1273,7 @@ fun SavedScreen(textColor: Color, textGray: Color, priceGreen: Color, cyanColor:
         category = "Healthy",
         title = "Green Goddess Harvest",
         description = "Kale, quinoa, roasted sweet potato, avocado, toasted pepitas, signature green goddess...",
-        price = "$16.60",
+        price = "₱210",
         priceGreen = priceGreen,
         cyanColor = cyanColor,
         appRed = appRed
