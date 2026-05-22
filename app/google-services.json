@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "554556204577",
+    "project_id": "finalexer3lab",
+    "storage_bucket": "finalexer3lab.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:554556204577:android:13505c29a3c8eddec2e560",
+        "android_client_info": {
+          "package_name": "com.example.finalexer3lab"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBmBCeB6qJesu5xHKKZlQQeur6kpNCgtxs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
