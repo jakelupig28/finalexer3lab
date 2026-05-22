@@ -62,6 +62,10 @@ import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.database.FirebaseDatabase
 import com.example.finalexer3lab.ui.theme.FinalExer3LabTheme
 
+data class FoodItemData(val title: String, val priceStr: String, val imageRes: Int, val priceVal: Int) {
+    val price: String get() = priceStr
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
